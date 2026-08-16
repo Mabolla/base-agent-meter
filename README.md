@@ -10,20 +10,23 @@ The first resource is `GET /api/base-snapshot`: a machine-readable Base block/ga
 - Paid resource: `GET https://base-agent-meter-production.up.railway.app/api/base-snapshot`
 - Price: `$0.001` USDC
 - Network: Base Mainnet (`eip155:8453`)
+- Base Builder Code: `bc_h2oqnbbh`
 
 An unpaid browser/client request returns HTTP `402 Payment Required`. A real x402 client payment has been exercised end to end and returned HTTP `200` with the protected Base snapshot.
 
 ## Verified Mainnet proof
 
-A real `$0.001` x402 payment was settled successfully on Base Mainnet on 2026-08-16.
+A real `$0.001` x402 payment with Base Builder Code attribution was settled successfully on Base Mainnet on 2026-08-16.
 
 - Payer: `0x30eFBc8e3815762014C22b0947c5a416d3d4C6d7`
-- Transaction: `0x3351988e6d37bc8dad9ca0e934f027503003168c470833450e33b71e6bc77d84`
+- Transaction: `0xb053dee1d2ebe6f47ad41408bffc58555c1b66be761aee2ef969c3b47460e96f`
 - x402 settlement response: `success: true`
 - HTTP result after payment: `200`
 - Protected response: `paid: true`, `protocol: x402-v2`, Base Mainnet snapshot (`chainId: 8453`)
+- Builder Code: `bc_h2oqnbbh`
+- Attribution verification: the public transaction calldata contains the Builder Code followed by the ERC-8021 suffix marker (`0x8021` repeated in the suffix)
 
-Explorer: `https://basescan.org/tx/0x3351988e6d37bc8dad9ca0e934f027503003168c470833450e33b71e6bc77d84`
+Explorer: `https://basescan.org/tx/0xb053dee1d2ebe6f47ad41408bffc58555c1b66be761aee2ef969c3b47460e96f`
 
 ## Why this exists
 
@@ -39,8 +42,10 @@ agent/client
    | GET /api/base-snapshot
    v
 x402 payment middleware
-   |-- no valid payment --> 402 + payment requirements
+   |-- no valid payment --> 402 + payment requirements + Builder Code extension
    |-- payment supplied --> CDP facilitator verify/settle
+   v
+Base Mainnet settlement with ERC-8021 attribution
    v
 paid route handler
    |
@@ -56,8 +61,9 @@ JSON block/gas snapshot
 - Network: Base Mainnet (`eip155:8453`)
 - Mainnet facilitator: authenticated Coinbase Developer Platform x402 facilitator
 - Default price: `$0.001`
+- Builder Code extension: official `@x402/extensions/builder-code` resource-server integration
 
-The production server uses `createCdpFacilitatorClient()` with `x402ResourceServer`, `ExactEvmScheme`, and Express `paymentMiddleware`. CDP credentials are supplied only through production environment variables and are not committed to the repository.
+The production server uses `createCdpFacilitatorClient()` with `x402ResourceServer`, `ExactEvmScheme`, Express `paymentMiddleware`, and `declareBuilderCodeExtension()` for Base attribution. CDP credentials are supplied only through production environment variables and are not committed to the repository.
 
 ## Safety choices
 
@@ -66,7 +72,7 @@ The production server uses `createCdpFacilitatorClient()` with `x402ResourceServ
 - CDP facilitator credentials stay in deployment environment variables, not source control.
 - The paid resource is read-only and has no trading or asset-management behavior.
 - The real-payment smoke client reads its payer key only from `EVM_PRIVATE_KEY`; no payer key is committed.
-- The first real payment was deliberately tiny (`$0.001`).
+- Real-payment verification uses a deliberately tiny `$0.001` payment.
 
 ## Run
 
@@ -119,8 +125,9 @@ Never commit a payer key or use a high-value wallet for smoke testing.
 - [x] Confirm unpaid production request returns a valid 402 challenge
 - [x] Make one tiny real x402 USDC payment on Base Mainnet
 - [x] Capture settlement/explorer proof
-- [ ] Register/complete the project on Base.dev
-- [ ] Obtain the official Builder Code and integrate ERC-8021 attribution through a supported path
-- [ ] Verify Builder Code attribution on a subsequent transaction
+- [x] Register the production project with Base and verify domain ownership
+- [x] Obtain the official Base Builder Code (`bc_h2oqnbbh`)
+- [x] Integrate Builder Code through the official x402 builder-code extension
+- [x] Verify Builder Code / ERC-8021 attribution in a subsequent Base Mainnet transaction
 
-The core x402 product is now verified end to end on Base Mainnet. Base.dev registration and Builder Code attribution remain explicit final distribution/attribution steps rather than being claimed prematurely.
+**Base Agent Meter v1 is verified end to end:** production deployment, x402 payment, Base Mainnet settlement, Base app registration, and onchain Builder Code attribution.
