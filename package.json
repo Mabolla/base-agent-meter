@@ -8,13 +8,15 @@
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "pay:smoke": "node scripts/pay-smoke.mjs"
   },
   "dependencies": {
     "@coinbase/cdp-sdk": "1.54.0",
     "@x402/core": "2.20.0",
     "@x402/evm": "2.20.0",
     "@x402/express": "2.20.0",
+    "@x402/fetch": "2.20.0",
     "@x402/svm": "2.20.0",
     "dotenv": "^16.4.7",
     "express": "^5.1.0",
