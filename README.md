@@ -1,54 +1,92 @@
 # Base Agent Meter
 
-An x402-powered paid API for AI agents on Base.
+An **x402 v2 paid API for AI agents on Base Mainnet**.
 
-## Mission
+The first resource is `GET /api/base-snapshot`: a machine-readable Base block/gas snapshot. The route is protected by the official x402 server stack and accepts a tiny USDC payment on Base before the handler runs.
 
-Base Agent Meter demonstrates a machine-to-machine payment flow where an agent requests an HTTP resource, receives `402 Payment Required`, pays in USDC on Base, and receives the protected JSON resource only after x402 verification and settlement.
+## Why this exists
 
-The first resource will be a small Base network diagnostics / block-summary endpoint so the project demonstrates x402 infrastructure without pretending to sell financial alpha.
+Agents should be able to buy API access without accounts, API keys, subscriptions, or a human checkout page. HTTP 402 plus onchain USDC gives the resource itself a machine-readable price and payment flow.
 
-## Architecture target
+This project intentionally differs from Base Receipt: Base Receipt is a human-facing Base Pay checkout with independent settlement verification; Base Agent Meter is an **agent-facing HTTP 402 resource server**.
+
+## Current architecture
 
 ```text
-AI agent / x402 client
-        |
-        | GET protected resource
-        v
-Base Agent Meter API
-        |
-        | 402 + x402 v2 payment requirements
-        v
-USDC payment on Base
-        |
-        | verify + settle through facilitator
-        v
-Protected JSON response + usage receipt
+agent/client
+   |
+   | GET /api/base-snapshot
+   v
+x402 payment middleware
+   |-- no valid payment --> 402 + payment requirements
+   |-- payment supplied --> facilitator verify/settle
+   v
+paid route handler
+   |
+   +--> Base Mainnet RPC
+   v
+JSON block/gas snapshot
 ```
 
-## Protocol decisions
+## x402 configuration
 
-- x402 **v2** semantics.
-- CAIP-2 network identifiers (`eip155:84532` for Base Sepolia during integration testing; `eip155:8453` for Base Mainnet production).
-- USDC / EIP-3009 compatible payment flow.
-- No private key in browser code.
-- No custom payment protocol when official x402 libraries cover the flow.
-- Mainnet is the production target; testnet is only a validation stage before real payments.
-- Builder Code attribution will use the official Base-supported path and will not be claimed until it is actually verified.
+- Protocol generation: x402 v2
+- Payment scheme: `exact`
+- Network: Base Mainnet (`eip155:8453`)
+- Mainnet facilitator: CDP x402 (`https://api.cdp.coinbase.com/platform/v2/x402`)
+- Default price: `$0.001`
 
-## Build gates
+The implementation follows the current official `coinbase/x402` TypeScript server API: `HTTPFacilitatorClient`, `x402ResourceServer`, `ExactEvmScheme`, and Express `paymentMiddleware`.
 
-Before this repository is considered complete:
+## Safety choices
 
-- [ ] Protected endpoint returns a standards-compliant x402 v2 `402` response
-- [ ] x402 client can pay and retrieve the protected resource
-- [ ] Payment is verified/settled through a supported facilitator
-- [ ] Automated tests cover unpaid access and protected-resource behavior
-- [ ] Typecheck/lint/build are green
-- [ ] Production deployment is live
-- [ ] A real Base Mainnet payment is exercised and linked as proof
-- [ ] Builder/agent attribution is wired and verified through official Base tooling
+- `PAY_TO` must be an explicit valid EVM address; there is no embedded receiver wallet.
+- Production config rejects accidental Base Sepolia/network substitution.
+- No private key is required by the resource server.
+- The paid resource is read-only and has no trading or asset-management behavior.
+- First real payment should remain deliberately tiny.
 
-## Sources of truth
+## Run
 
-Implementation follows the current x402 v2 specification and Base's official builder guidance. API details will be re-checked against those sources before implementation rather than copied from stale examples.
+```bash
+cp .env.example .env
+npm install
+npm run typecheck
+npm test
+npm run dev
+```
+
+Required production value:
+
+```env
+PAY_TO=0xYourBaseMainnetReceiver
+```
+
+Free health endpoint:
+
+```bash
+curl http://localhost:4021/health
+```
+
+An unpaid request to the protected endpoint should return HTTP `402` with x402 payment requirements:
+
+```bash
+curl -i http://localhost:4021/api/base-snapshot
+```
+
+## Completion gates
+
+- [x] Official x402 v2 server API selected from current upstream examples
+- [x] Base Mainnet CAIP-2 network configured
+- [x] Protected agent-consumable endpoint implemented
+- [x] Explicit receiver-address validation
+- [x] Tests for network/address safety
+- [x] GitHub Actions typecheck + test gate
+- [ ] Capture green CI
+- [ ] Deploy production service
+- [ ] Confirm unpaid production request returns a valid 402 challenge
+- [ ] Make one tiny real x402 USDC payment on Base Mainnet
+- [ ] Capture settlement/explorer proof
+- [ ] Add Builder Code attribution only through an officially supported path and verify it
+
+No completion claim will be made until the real Mainnet x402 flow is exercised end to end.
