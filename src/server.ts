@@ -14,6 +14,21 @@ const resourceServer = new x402ResourceServer(facilitator).register(
   new ExactEvmScheme(),
 );
 
+app.get("/", (_req, res) => {
+  res.json({
+    service: "base-agent-meter",
+    protocol: "x402-v2",
+    network: config.network,
+    paidResource: {
+      method: "GET",
+      path: "/api/base-snapshot",
+      price: config.price,
+      asset: "USDC",
+    },
+    health: "/health",
+  });
+});
+
 app.get("/health", (_req, res) => {
   res.json({ ok: true, service: "base-agent-meter", network: config.network });
 });
