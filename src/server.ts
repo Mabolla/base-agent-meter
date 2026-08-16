@@ -8,6 +8,9 @@ import { getBaseSnapshot } from "./snapshot.js";
 const config = loadConfig();
 const app = express();
 
+// Base Dashboard uses this metadata on the homepage to verify app ownership.
+const baseAppId = "6a81d256b92232d481b384bc";
+
 // The CDP-hosted mainnet facilitator requires authenticated requests.
 // createCdpFacilitatorClient reads CDP_API_KEY_ID and CDP_API_KEY_SECRET
 // from the environment and signs the facilitator requests for us.
@@ -18,18 +21,24 @@ const resourceServer = new x402ResourceServer(facilitator).register(
 );
 
 app.get("/", (_req, res) => {
-  res.json({
-    service: "base-agent-meter",
-    protocol: "x402-v2",
-    network: config.network,
-    paidResource: {
-      method: "GET",
-      path: "/api/base-snapshot",
-      price: config.price,
-      asset: "USDC",
-    },
-    health: "/health",
-  });
+  res.type("html").send(`<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="base:app_id" content="${baseAppId}" />
+    <title>Base Agent Meter</title>
+  </head>
+  <body>
+    <main>
+      <h1>Base Agent Meter</h1>
+      <p>x402 Data API for Base Agents</p>
+      <p>Paid resource: <code>GET /api/base-snapshot</code></p>
+      <p>Protocol: x402 v2 · Network: Base Mainnet · Price: ${config.price} USDC</p>
+      <p><a href="/health">Health</a></p>
+    </main>
+  </body>
+</html>`);
 });
 
 app.get("/health", (_req, res) => {
