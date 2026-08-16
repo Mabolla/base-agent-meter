@@ -11,9 +11,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@x402/core": "latest",
-    "@x402/evm": "latest",
-    "@x402/express": "latest",
+    "@x402/core": "2.20.0",
+    "@x402/evm": "2.20.0",
+    "@x402/express": "2.20.0",
     "dotenv": "^16.4.7",
     "express": "^5.1.0",
     "viem": "^2.37.0"
