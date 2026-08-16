@@ -4,13 +4,14 @@ import { ExactEvmScheme } from "@x402/evm";
 import { privateKeyToAccount } from "viem/accounts";
 
 const target = process.env.API_URL ?? "https://base-agent-meter-production.up.railway.app/api/base-snapshot";
-const privateKey = process.env.EVM_PRIVATE_KEY;
+const rawPrivateKey = process.env.EVM_PRIVATE_KEY?.trim();
 
-if (!privateKey || !/^0x[0-9a-fA-F]{64}$/.test(privateKey)) {
-  console.error("EVM_PRIVATE_KEY must be a 32-byte 0x-prefixed private key. Use a low-balance dedicated test wallet; never commit it.");
+if (!rawPrivateKey || !/^(0x)?[0-9a-fA-F]{64}$/.test(rawPrivateKey)) {
+  console.error("EVM_PRIVATE_KEY must be a 32-byte hex private key, with or without the 0x prefix. Use a low-balance dedicated test wallet; never commit it.");
   process.exit(1);
 }
 
+const privateKey = (rawPrivateKey.startsWith("0x") ? rawPrivateKey : `0x${rawPrivateKey}`);
 const account = privateKeyToAccount(privateKey);
 const paidFetch = wrapFetchWithPaymentFromConfig(fetch, {
   schemes: [
