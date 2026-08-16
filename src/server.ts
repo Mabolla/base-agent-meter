@@ -1,5 +1,5 @@
 import express from "express";
-import { HTTPFacilitatorClient } from "@x402/core/server";
+import { createCdpFacilitatorClient } from "@coinbase/cdp-sdk/x402";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
 import { paymentMiddleware, x402ResourceServer } from "@x402/express";
 import { loadConfig } from "./config.js";
@@ -8,7 +8,10 @@ import { getBaseSnapshot } from "./snapshot.js";
 const config = loadConfig();
 const app = express();
 
-const facilitator = new HTTPFacilitatorClient({ url: config.facilitatorUrl });
+// The CDP-hosted mainnet facilitator requires authenticated requests.
+// createCdpFacilitatorClient reads CDP_API_KEY_ID and CDP_API_KEY_SECRET
+// from the environment and signs the facilitator requests for us.
+const facilitator = createCdpFacilitatorClient();
 const resourceServer = new x402ResourceServer(facilitator).register(
   config.network,
   new ExactEvmScheme(),
