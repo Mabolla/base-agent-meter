@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@coinbase/cdp-sdk": "1.54.0",
     "@x402/core": "2.20.0",
     "@x402/evm": "2.20.0",
     "@x402/express": "2.20.0",
