@@ -2,6 +2,7 @@ import express from "express";
 import { createCdpFacilitatorClient } from "@coinbase/cdp-sdk/x402";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
 import { paymentMiddleware, x402ResourceServer } from "@x402/express";
+import { BUILDER_CODE, declareBuilderCodeExtension } from "@x402/extensions/builder-code";
 import { loadConfig } from "./config.js";
 import { getBaseSnapshot } from "./snapshot.js";
 
@@ -10,6 +11,7 @@ const app = express();
 
 // Base Dashboard uses this metadata on the homepage to verify app ownership.
 const baseAppId = "6a81d256b92232d481b384bc";
+const appBuilderCode = "bc_h2oqnbbh";
 
 // The CDP-hosted mainnet facilitator requires authenticated requests.
 // createCdpFacilitatorClient reads CDP_API_KEY_ID and CDP_API_KEY_SECRET
@@ -59,6 +61,9 @@ app.use(
         ],
         description: "Machine-readable Base Mainnet block and gas snapshot for AI agents",
         mimeType: "application/json",
+        extensions: {
+          [BUILDER_CODE]: declareBuilderCodeExtension(appBuilderCode),
+        },
       },
     },
     resourceServer,
