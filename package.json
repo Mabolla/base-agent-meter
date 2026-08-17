@@ -9,18 +9,22 @@
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "pay:smoke": "node scripts/pay-smoke.mjs"
+    "check": "tsx src/cli.ts",
+    "canary": "node scripts/canary.mjs",
+    "pay:smoke": "node scripts/canary.mjs"
   },
   "dependencies": {
     "@coinbase/cdp-sdk": "1.54.0",
     "@x402/core": "2.20.0",
     "@x402/evm": "2.20.0",
     "@x402/express": "2.20.0",
+    "@x402/extensions": "^2.20.0",
     "@x402/fetch": "2.20.0",
     "@x402/svm": "2.20.0",
     "dotenv": "^16.4.7",
     "express": "^5.1.0",
-    "viem": "^2.37.0"
+    "ox": "^1.6.2",
+    "viem": "^2.45.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.3",

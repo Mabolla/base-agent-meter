@@ -1,135 +1,121 @@
-# Base Agent Meter
+# Base Agent Meter - x402 Production Assurance
 
-An **x402 v2 paid API for AI agents on Base Mainnet**.
+Base Agent Meter answers one production question:
 
-The first resource is `GET /api/base-snapshot`: a machine-readable Base block/gas snapshot. The route is protected by the official x402 server stack and accepts a tiny USDC payment on Base before the handler runs.
+> Can an autonomous agent discover, pay for, settle, and successfully consume my x402 service right now, and can I prove the Base transaction and attribution?
 
-## Live production
+It is a focused assurance tool for teams operating x402-paid APIs on Base. It provides an unpaid pre-deploy check, an explicitly gated real-buyer canary, and Base-native settlement proof.
+
+## 1. Pre-deploy and CI check
+
+The checker contacts a public seller endpoint without providing payment and validates reachability, x402 v2 negotiation, Base Mainnet, Base USDC, positive atomic amount, valid `payTo`, pinned expectation drift, Bazaar metadata, and declared ERC-8021 builder attribution.
+
+Builder attribution in a 402 response is reported as **declared**, never verified. Verification requires a completed settlement transaction.
+
+```bash
+npm run check -- https://api.example.com/paid-resource --expect-pay-to 0xYourExpectedRecipient --expect-amount 1000
+```
+
+For POST resources:
+
+```bash
+npm run check -- https://api.example.com/paid-resource --method POST --body '{"query":"value"}'
+```
+
+The CLI prints JSON. `FAIL` exits with code 1 and invalid input exits with code 2. `PASS` and `WARN` exit successfully so teams can choose their warning policy. The same workflow is available through `POST /api/check`. Public DNS resolution is checked and private, loopback, link-local, and carrier-grade NAT targets are rejected.
+
+## 2. Live paid canary
+
+The canary follows the real buyer path:
+
+```text
+402 negotiation -> payment preparation -> payment -> settlement -> protected response -> Base proof
+```
+
+Dry-run is the default and never loads a payer key:
+
+```bash
+npm run build
+npm run canary -- https://api.example.com/paid-resource
+```
+
+A real payment requires pinned expectations and an explicit confirmation token:
+
+```env
+CANARY_EXPECT_PAY_TO=0xApprovedRecipient
+CANARY_EXPECT_AMOUNT=1000
+CANARY_CONFIRM=PAY_BASE_MAINNET_CANARY
+EVM_PRIVATE_KEY=dedicated-low-balance-wallet-key
+```
+
+```bash
+npm run canary -- https://api.example.com/paid-resource --execute
+```
+
+The runner refuses to continue if the observed Base Mainnet network, Base USDC contract, amount, or recipient differs from the approved values. It verifies the settlement response and protected HTTP response, records settlement evidence, then waits for a public RPC receipt before reading the transaction. This polling handles the interval in which a facilitator has reported success but the transaction is not yet indexed by the configured RPC.
+
+Retries are not automatic because repeating a paid request may create another settlement.
+
+## 3. Base-native proof
+
+After a completed canary, Base Agent Meter verifies transaction inclusion and status, Base USDC `Transfer` evidence, expected payer, recipient, and amount, and the ERC-8021 calldata suffix when present. The result distinguishes declared, observed, and verified builder attribution.
+
+The canary writes a JSON artifact under `artifacts/` containing endpoint, timestamp, payment terms, payer, transaction hash, response status, latency, response body hash, USDC evidence, and builder-attribution evidence. Existing transactions can be checked through `POST /api/proof/verify`.
+
+## Existing deployed seller fixture
+
+The repository preserves the original paid Base snapshot as an optional self-test fixture. The deployment predates the Production Assurance pivot.
 
 - Service: `https://base-agent-meter-production.up.railway.app`
-- Paid resource: `GET https://base-agent-meter-production.up.railway.app/api/base-snapshot`
+- Resource: `GET /api/base-snapshot`
 - Price: `$0.001` USDC
 - Network: Base Mainnet (`eip155:8453`)
-- Base Builder Code: `bc_h2oqnbbh`
+- Base app ID: `6a81d256b92232d481b384bc`
+- Official Builder Code: `bc_h2oqnbbh`
 
-An unpaid browser/client request returns HTTP `402 Payment Required`. A real x402 client payment has been exercised end to end and returned HTTP `200` with the protected Base snapshot.
+The fixture is enabled only when `PAY_TO`, `CDP_API_KEY_ID`, and `CDP_API_KEY_SECRET` are configured. It uses the official x402 server stack, CDP facilitator, Bazaar declaration, and builder-code extension. The homepage retains Base app ownership metadata.
 
-## Verified Mainnet proof
+### Verified seller-fixture proof
 
-A real `$0.001` x402 payment with Base Builder Code attribution was settled successfully on Base Mainnet on 2026-08-16.
+A real `$0.001` fixture payment settled on Base Mainnet on 2026-08-16:
 
 - Payer: `0x30eFBc8e3815762014C22b0947c5a416d3d4C6d7`
 - Transaction: `0xb053dee1d2ebe6f47ad41408bffc58555c1b66be761aee2ef969c3b47460e96f`
-- x402 settlement response: `success: true`
-- HTTP result after payment: `200`
-- Protected response: `paid: true`, `protocol: x402-v2`, Base Mainnet snapshot (`chainId: 8453`)
-- Builder Code: `bc_h2oqnbbh`
-- Attribution verification: the public transaction calldata contains the Builder Code followed by the ERC-8021 suffix marker (`0x8021` repeated in the suffix)
-- Base Dashboard confirmation: the registered Base Agent Meter app subsequently reported `Number of Transactions: 1` under the `Other` analytics category, confirming that Base's app analytics indexed an attributed transaction. This proof does not claim a Base App-originated user transaction; the smoke payment was generated by the standalone x402 client.
+- Settlement response: `success: true`
+- Protected response: HTTP 200 with `paid: true` and `protocol: x402-v2`
+- Attribution: transaction calldata contains Builder Code `bc_h2oqnbbh` and the ERC-8021 suffix marker
+- Base Dashboard: the registered app reported one transaction in the `Other` analytics category
 
 Explorer: `https://basescan.org/tx/0xb053dee1d2ebe6f47ad41408bffc58555c1b66be761aee2ef969c3b47460e96f`
 
-## Why this exists
+This evidence verifies the seller fixture's payment and attribution path. It does not claim Base App-originated user traffic, broader adoption, or ongoing service availability.
 
-Agents should be able to buy API access without accounts, API keys, subscriptions, or a human checkout page. HTTP 402 plus onchain USDC gives the resource itself a machine-readable price and payment flow.
-
-This project intentionally differs from Base Receipt: Base Receipt is a human-facing Base Pay checkout with independent settlement verification; Base Agent Meter is an **agent-facing HTTP 402 resource server**.
-
-## Current architecture
-
-```text
-agent/client
-   |
-   | GET /api/base-snapshot
-   v
-x402 payment middleware
-   |-- no valid payment --> 402 + payment requirements + Builder Code extension
-   |-- payment supplied --> CDP facilitator verify/settle
-   v
-Base Mainnet settlement with ERC-8021 attribution
-   v
-paid route handler
-   |
-   +--> Base Mainnet RPC
-   v
-JSON block/gas snapshot
-```
-
-## x402 configuration
-
-- Protocol generation: x402 v2
-- Payment scheme: `exact`
-- Network: Base Mainnet (`eip155:8453`)
-- Mainnet facilitator: authenticated Coinbase Developer Platform x402 facilitator
-- Default price: `$0.001`
-- Builder Code extension: official `@x402/extensions/builder-code` resource-server integration
-
-The production server uses `createCdpFacilitatorClient()` with `x402ResourceServer`, `ExactEvmScheme`, Express `paymentMiddleware`, and `declareBuilderCodeExtension()` for Base attribution. CDP credentials are supplied only through production environment variables and are not committed to the repository.
-
-## Safety choices
-
-- `PAY_TO` must be an explicit valid EVM address; there is no embedded receiver wallet.
-- Production config rejects accidental Base Sepolia/network substitution.
-- CDP facilitator credentials stay in deployment environment variables, not source control.
-- The paid resource is read-only and has no trading or asset-management behavior.
-- The real-payment smoke client reads its payer key only from `EVM_PRIVATE_KEY`; no payer key is committed.
-- Real-payment verification uses a deliberately tiny `$0.001` payment.
-
-## Run
+## Local server
 
 ```bash
-cp .env.example .env
 npm install
 npm run typecheck
 npm test
-npm run dev
+npm run build
+npm start
 ```
 
-Required production value:
+Open `http://localhost:4021` for the checker. Assurance workflows require no seller or wallet credentials.
+
+Optional fixture configuration:
 
 ```env
-PAY_TO=0xYourBaseMainnetReceiver
+PAY_TO=0xBaseMainnetRecipient
+CDP_API_KEY_ID=your-cdp-key-id
+CDP_API_KEY_SECRET=your-cdp-key-secret
+BUILDER_CODE=bc_h2oqnbbh
 ```
 
-Free health endpoint:
+## Safety boundaries
 
-```bash
-curl http://localhost:4021/health
-```
-
-An unpaid request to the protected endpoint should return HTTP `402` with x402 payment requirements:
-
-```bash
-curl -i http://localhost:4021/api/base-snapshot
-```
-
-## Real-payment smoke client
-
-`scripts/pay-smoke.mjs` exercises the production x402 flow with a dedicated low-balance Base wallet. It accepts both the 64-character MetaMask export format and a `0x`-prefixed 32-byte EVM private key.
-
-```bash
-EVM_PRIVATE_KEY=<dedicated-test-wallet-key> npm run pay:smoke
-```
-
-Never commit a payer key or use a high-value wallet for smoke testing.
-
-## Completion gates
-
-- [x] Official x402 v2 server API selected from current upstream examples
-- [x] Base Mainnet CAIP-2 network configured
-- [x] Protected agent-consumable endpoint implemented
-- [x] Explicit receiver-address validation
-- [x] Tests for network/address safety
-- [x] GitHub Actions typecheck + test + build gate
-- [x] Capture green CI
-- [x] Deploy production service
-- [x] Confirm unpaid production request returns a valid 402 challenge
-- [x] Make one tiny real x402 USDC payment on Base Mainnet
-- [x] Capture settlement/explorer proof
-- [x] Register the production project with Base and verify domain ownership
-- [x] Obtain the official Base Builder Code (`bc_h2oqnbbh`)
-- [x] Integrate Builder Code through the official x402 builder-code extension
-- [x] Verify Builder Code / ERC-8021 attribution in a subsequent Base Mainnet transaction
-- [x] Confirm Base Dashboard analytics indexes the attributed transaction (`Other` → `Number of Transactions: 1`)
-
-**Base Agent Meter v1 is verified end to end:** production deployment, x402 payment, Base Mainnet settlement, Base app registration, onchain Builder Code attribution, and Base Dashboard indexing of an attributed transaction.
+- Checks are read-only and never submit payment headers.
+- Canary dry-runs do not load or require a private key.
+- Real payment requires pinned expectations and a confirmation token.
+- Secrets remain environment-only and are excluded from git.
+- Tests do not sign or broadcast transactions.
+- Reports use observed results; no synthetic uptime or transaction data is generated.
