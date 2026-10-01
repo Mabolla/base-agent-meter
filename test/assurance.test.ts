@@ -21,7 +21,7 @@ const challenge: PaymentRequired = {
   },
 };
 
-const publicDns = async () => ["203.0.113.10"];
+const publicDns = async () => ["93.184.216.34"];
 
 describe("checkX402Endpoint", () => {
   it("passes valid Base USDC negotiation and distinguishes declared attribution", async () => {

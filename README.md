@@ -22,7 +22,7 @@ For POST resources:
 npm run check -- https://api.example.com/paid-resource --method POST --body '{"query":"value"}'
 ```
 
-The CLI prints JSON. `FAIL` exits with code 1 and invalid input exits with code 2. `PASS` and `WARN` exit successfully so teams can choose their warning policy. The same workflow is available through `POST /api/check`. Public DNS resolution is checked and private, loopback, link-local, and carrier-grade NAT targets are rejected.
+The CLI prints JSON. `FAIL` exits with code 1 and invalid input exits with code 2. `PASS` and `WARN` exit successfully so teams can choose their warning policy. The same workflow is available through `POST /api/check`. The checker rejects non-public IP addresses, connects only to the DNS addresses it validated, does not follow redirects, and caps response bodies at 128 KiB. Explicit POST checks can have effects on the target service; the MCP tool supports GET only.
 
 ## Agent interface (MCP)
 
@@ -30,10 +30,10 @@ Base Agent Meter exposes a remote MCP Streamable HTTP endpoint at `/mcp`. It pub
 
 | Tool | Purpose |
 | --- | --- |
-| `check_x402_endpoint` | Inspect a public seller endpoint's x402 v2 challenge, Base USDC terms, Bazaar metadata, Builder Code declaration, and optional pinned expectations. |
+| `check_x402_endpoint` | Send an unpaid GET to inspect a public seller endpoint's x402 v2 challenge, Base USDC terms, Bazaar metadata, Builder Code declaration, and optional pinned expectations. |
 | `verify_base_settlement` | Verify an existing Base transaction's successful receipt and USDC transfer, with optional payer and Builder Code checks. |
 
-Neither tool can create a payment, sign a transaction, or access payer credentials. The endpoint uses stateless Streamable HTTP; there is no MCP session state. Requests to `/mcp` are limited to 30 per minute per client IP. The older JSON endpoints remain available for scripts and CI. Once deployed, connect an MCP client to `https://<your-deployment-host>/mcp`.
+Neither tool can create a payment, sign a transaction, or access payer credentials. The endpoint uses stateless Streamable HTTP; there is no MCP session state. HTTP POST is the MCP transport method; GET and DELETE on `/mcp` return 405. Requests to `/mcp` are limited to 30 per minute per observed connection IP. Behind a reverse proxy this can be a shared limit; forwarded IP headers are not trusted. The older JSON endpoints remain available for scripts and CI. Once deployed, connect an MCP client to `https://<your-deployment-host>/mcp`.
 
 Example tool inputs:
 
@@ -42,10 +42,18 @@ Example tool inputs:
 ```
 
 ```json
-{"transactionHash":"0x...","expectedPayTo":"0xYourExpectedRecipient","expectedAmount":"1000","expectedPayer":"0xOptionalExpectedPayer"}
+{"transactionHash":"0x...","expectedPayTo":"0xYourExpectedRecipient","expectedAmount":"1000","expectedPayer":"0xOptionalExpectedPayer","declaredBuilderCode":"seller_code"}
 ```
 
-`expectedAmount` is the integer amount in USDC's 6-decimal atomic units. A challenge can declare a Builder Code, but the tool only reports attribution as verified when it observes the configured code in the completed transaction.
+`expectedAmount` is the integer amount in USDC's 6-decimal atomic units. `expectedPayer` and `declaredBuilderCode` are optional. Addresses and transaction hashes above are placeholders. The proof tool always reports observed attribution, and marks it verified only when it matches the explicitly supplied `declaredBuilderCode`. Omitting that field does not silently use this project's Builder Code.
+
+A runnable SDK example is provided for agent developers:
+
+```bash
+node examples/agent-client.mjs https://<your-deployment-host>/mcp https://<seller-host>/paid-resource
+```
+
+The automated MCP integration test uses the official SDK client against a real local HTTP listener to exercise discovery, tool calls, input validation, and unsupported transport methods. It does not establish public deployment availability.
 
 ## 2. Live paid canary
 
@@ -85,9 +93,13 @@ After a completed canary, Base Agent Meter verifies transaction inclusion and st
 
 The canary writes a JSON artifact under `artifacts/` containing endpoint, timestamp, payment terms, payer, transaction hash, response status, latency, response body hash, USDC evidence, and builder-attribution evidence. Existing transactions can be checked through `POST /api/proof/verify`.
 
-## Existing deployed seller fixture
+## Deployment status and optional seller fixture
 
-The repository preserves the original paid Base snapshot as an optional self-test fixture. The deployment predates the Production Assurance pivot.
+The previously configured Railway host returned **HTTP 404, Application not found**, on 2026-10-01. Public availability of `/health` and `/mcp` is not verified. A passing build or a merged commit is not evidence of a live service.
+
+`railway.json` selects the Dockerfile, sets `/health` as the deployment health check, and configures up to three on-failure restarts. The Docker build and CI use the committed dependency lockfile. This configuration applies when an authorized Railway service deploys the repository; it does not create or reconnect that service. See [Railway's configuration reference](https://docs.railway.com/config-as-code/reference).
+
+The repository preserves the original paid Base snapshot as an optional self-test fixture. Its historical deployment predates the Production Assurance pivot.
 
 - Service: `https://base-agent-meter-production.up.railway.app`
 - Resource: `GET /api/base-snapshot`
@@ -116,7 +128,7 @@ This evidence verifies the seller fixture's payment and attribution path. It doe
 ## Local server
 
 ```bash
-npm install
+npm ci
 npm run typecheck
 npm test
 npm run build
@@ -136,7 +148,7 @@ BUILDER_CODE=bc_h2oqnbbh
 
 ## Safety boundaries
 
-- Checks are read-only and never submit payment headers.
+- The MCP checker sends unpaid GET requests and never submits payment headers. Explicit CLI/API POST checks may have effects on the target service.
 - Canary dry-runs do not load or require a private key.
 - Real payment requires pinned expectations and a confirmation token.
 - Secrets remain environment-only and are excluded from git.

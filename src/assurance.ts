@@ -1,5 +1,5 @@
-import { lookup } from "node:dns/promises";
-import { isIP } from "node:net";
+import { CheckInputError, requestPublicTarget, resolvePublicTarget } from "./public-http.js";
+export { CheckInputError } from "./public-http.js";
 import { decodePaymentRequiredHeader } from "@x402/core/http";
 import { parsePaymentRequired } from "@x402/core/schemas";
 import { getAddress, isAddress } from "viem";
@@ -58,50 +58,10 @@ export interface AssuranceReport {
   findings: AssuranceFinding[];
 }
 
-export class CheckInputError extends Error {}
-
 interface CheckDependencies {
   fetchImpl?: typeof fetch;
   resolveHost?: (hostname: string) => Promise<string[]>;
   now?: () => Date;
-}
-
-function isPrivateAddress(address: string): boolean {
-  const normalized = address.toLowerCase();
-  if (normalized === "::1" || normalized === "::" || normalized.startsWith("fe80:") || normalized.startsWith("fc") || normalized.startsWith("fd")) return true;
-  if (!isIP(address)) return true;
-  const parts = address.split(".").map(Number);
-  if (parts.length !== 4) return false;
-  return parts[0] === 10
-    || parts[0] === 127
-    || parts[0] === 0
-    || (parts[0] === 169 && parts[1] === 254)
-    || (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31)
-    || (parts[0] === 192 && parts[1] === 168)
-    || (parts[0] === 100 && parts[1] >= 64 && parts[1] <= 127);
-}
-
-async function defaultResolveHost(hostname: string): Promise<string[]> {
-  const records = await lookup(hostname, { all: true, verbatim: true });
-  return records.map(record => record.address);
-}
-
-async function validatePublicUrl(rawUrl: string, resolveHost: (hostname: string) => Promise<string[]>): Promise<URL> {
-  let url: URL;
-  try {
-    url = new URL(rawUrl);
-  } catch {
-    throw new CheckInputError("url must be a valid absolute URL");
-  }
-  if (url.protocol !== "https:" && url.protocol !== "http:") {
-    throw new CheckInputError("url must use http or https");
-  }
-  if (url.username || url.password) throw new CheckInputError("url credentials are not allowed");
-  const addresses = await resolveHost(url.hostname);
-  if (addresses.length === 0 || addresses.some(isPrivateAddress)) {
-    throw new CheckInputError("url must resolve only to public IP addresses");
-  }
-  return url;
 }
 
 function decodeChallenge(response: Response, body: unknown): unknown {
@@ -135,11 +95,10 @@ export async function checkX402Endpoint(input: CheckRequest, dependencies: Check
   if (!input || typeof input !== "object" || typeof input.url !== "string") {
     throw new CheckInputError("url must be a valid absolute URL");
   }
-  const fetchImpl = dependencies.fetchImpl ?? fetch;
-  const resolveHost = dependencies.resolveHost ?? defaultResolveHost;
   const now = dependencies.now ?? (() => new Date());
   const startedAt = performance.now();
-  const url = await validatePublicUrl(input.url, resolveHost);
+  const target = await resolvePublicTarget(input.url, dependencies.resolveHost);
+  const url = target.url;
   const method = input.method ?? "GET";
   if (method !== "GET" && method !== "POST") throw new CheckInputError("method must be GET or POST");
   const expectations = input.expectations ?? {};
@@ -153,13 +112,16 @@ export async function checkX402Endpoint(input: CheckRequest, dependencies: Check
   let response: Response;
   let responseBody: unknown;
   try {
-    response = await fetchImpl(url, {
+    const request: RequestInit = {
       method,
       redirect: "manual",
       signal: AbortSignal.timeout(12_000),
       headers: method === "POST" ? { "content-type": "application/json", accept: "application/json" } : { accept: "application/json" },
       body: method === "POST" ? JSON.stringify(input.body ?? {}) : undefined,
-    });
+    };
+    response = dependencies.fetchImpl
+      ? await dependencies.fetchImpl(url, request)
+      : await requestPublicTarget(target, request);
     const text = await response.text();
     try { responseBody = text ? JSON.parse(text) : undefined; } catch { responseBody = text; }
   } catch (error) {
