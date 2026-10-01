@@ -2,7 +2,22 @@ import { decodeEventLog, erc20Abi, getAddress, type Hex } from "viem";
 import { createPublicClient, http } from "viem";
 import { base } from "viem/chains";
 import { parseBuilderCodeSuffixFromCalldata } from "@x402/extensions/builder-code";
+import { Attribution } from "ox/erc8021";
 import { BASE_USDC } from "./assurance.js";
+
+export function inspectBuilderAttribution(calldata: Hex, declaredBuilderCode?: string) {
+  const x402 = parseBuilderCodeSuffixFromCalldata(calldata);
+  if (x402) {
+    return { declared: declaredBuilderCode ?? null, observed: x402, format: "erc8021-schema-2" as const, verified: Boolean(declaredBuilderCode && x402.a === declaredBuilderCode) };
+  }
+  let legacy: ReturnType<typeof Attribution.fromData>;
+  try { legacy = Attribution.fromData(calldata); } catch { legacy = undefined; }
+  if (legacy?.id === 0) {
+    return { declared: declaredBuilderCode ?? null, observed: legacy, format: "erc8021-schema-0" as const, verified: Boolean(declaredBuilderCode && legacy.codes.includes(declaredBuilderCode)) };
+  }
+  // Schema 1 uses a custom registry. A matching string alone cannot establish its identity.
+  return { declared: declaredBuilderCode ?? null, observed: legacy ?? null, format: legacy ? `erc8021-schema-${legacy.id}` : null, verified: false };
+}
 
 export async function verifyBaseSettlement(
   rpcUrl: string,
@@ -30,8 +45,7 @@ export async function verifyBaseSettlement(
     && transfer.amount === input.expectedAmount
     && (!input.expectedPayer || transfer.from === getAddress(input.expectedPayer)),
   );
-  const attribution = parseBuilderCodeSuffixFromCalldata(transaction.input);
-  const builderVerified = Boolean(input.declaredBuilderCode && attribution?.a === input.declaredBuilderCode);
+  const builderAttribution = inspectBuilderAttribution(transaction.input, input.declaredBuilderCode);
   const settlementVerified = receipt.status === "success" && Boolean(expectedTransfer);
 
   return {
@@ -47,10 +61,6 @@ export async function verifyBaseSettlement(
       matchingTransfer: expectedTransfer ?? null,
       observedTransfers: transfers,
     },
-    builderAttribution: {
-      declared: input.declaredBuilderCode ?? null,
-      observed: attribution ?? null,
-      verified: builderVerified,
-    },
+    builderAttribution,
   };
 }
