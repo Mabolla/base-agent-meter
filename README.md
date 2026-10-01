@@ -55,6 +55,21 @@ node examples/agent-client.mjs https://<your-deployment-host>/mcp https://<selle
 
 The automated MCP integration test uses the official SDK client against a real local HTTP listener to exercise discovery, tool calls, input validation, and unsupported transport methods. It does not establish public deployment availability.
 
+### Embed the same checker in an existing Node host
+
+The package exports `handleMeterWebRequest`, `createMeterMcpServer`, `checkX402Endpoint` and `verifyBaseSettlement`. Importing it does not start the Express server or enable the paid fixture. A host can pin a Git commit of this repository and reuse the same checked code without maintaining a second copy.
+
+```ts
+import { handleMeterWebRequest } from "base-agent-meter";
+
+export const runtime = "nodejs";
+export function POST(request: Request) {
+  return handleMeterWebRequest(request, { rpcUrl: process.env.BASE_RPC_URL ?? "https://mainnet.base.org" });
+}
+```
+
+The Web adapter uses stateless JSON responses, rejects foreign browser origins, and caps MCP request bodies at 64 KiB. The host supplies its own request limits. Node DNS and HTTP support are required for the checker's pinned public-IP connections; an Edge runtime is not supported. The `prepare` script builds Git-sourced packages when source files are present, while Docker's dependency-only layers skip it and retain their explicit build step.
+
 ## 2. Live paid canary
 
 The canary follows the real buyer path:

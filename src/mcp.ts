@@ -6,7 +6,7 @@ import { z } from "zod";
 import { checkX402Endpoint, type CheckRequest } from "./assurance.js";
 import { verifyBaseSettlement } from "./proof.js";
 
-interface McpDependencies {
+export interface McpDependencies {
   checkEndpoint?: typeof checkX402Endpoint;
   verifySettlement?: typeof verifyBaseSettlement;
   rpcUrl: string;
