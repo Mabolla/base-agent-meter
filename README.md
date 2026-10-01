@@ -24,6 +24,29 @@ npm run check -- https://api.example.com/paid-resource --method POST --body '{"q
 
 The CLI prints JSON. `FAIL` exits with code 1 and invalid input exits with code 2. `PASS` and `WARN` exit successfully so teams can choose their warning policy. The same workflow is available through `POST /api/check`. Public DNS resolution is checked and private, loopback, link-local, and carrier-grade NAT targets are rejected.
 
+## Agent interface (MCP)
+
+Base Agent Meter exposes a remote MCP Streamable HTTP endpoint at `/mcp`. It publishes two read-only tools that agents can discover through the MCP protocol:
+
+| Tool | Purpose |
+| --- | --- |
+| `check_x402_endpoint` | Inspect a public seller endpoint's x402 v2 challenge, Base USDC terms, Bazaar metadata, Builder Code declaration, and optional pinned expectations. |
+| `verify_base_settlement` | Verify an existing Base transaction's successful receipt and USDC transfer, with optional payer and Builder Code checks. |
+
+Neither tool can create a payment, sign a transaction, or access payer credentials. The endpoint uses stateless Streamable HTTP; there is no MCP session state. Requests to `/mcp` are limited to 30 per minute per client IP. The older JSON endpoints remain available for scripts and CI. Once deployed, connect an MCP client to `https://<your-deployment-host>/mcp`.
+
+Example tool inputs:
+
+```json
+{"url":"https://seller.example/paid","expectations":{"network":"eip155:8453","payTo":"0xYourExpectedRecipient","amount":"1000"}}
+```
+
+```json
+{"transactionHash":"0x...","expectedPayTo":"0xYourExpectedRecipient","expectedAmount":"1000","expectedPayer":"0xOptionalExpectedPayer"}
+```
+
+`expectedAmount` is the integer amount in USDC's 6-decimal atomic units. A challenge can declare a Builder Code, but the tool only reports attribution as verified when it observes the configured code in the completed transaction.
+
 ## 2. Live paid canary
 
 The canary follows the real buyer path:
