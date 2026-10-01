@@ -6,6 +6,8 @@ Base Agent Meter answers one production question:
 
 It is a focused assurance tool for teams operating x402-paid APIs on Base. It provides an unpaid pre-deploy check, an explicitly gated real-buyer canary, and Base-native settlement proof.
 
+**Live read-only interface:** [Base Agent Meter](https://base-receipt-six.vercel.app/meter) · **MCP:** `https://base-receipt-six.vercel.app/meter/mcp` · [Hosted capabilities and pinned source revision](https://base-receipt-six.vercel.app/api/meter).
+
 ## 1. Pre-deploy and CI check
 
 The checker contacts a public seller endpoint without providing payment and validates reachability, x402 v2 negotiation, Base Mainnet, Base USDC, positive atomic amount, valid `payTo`, pinned expectation drift, Bazaar metadata, and declared ERC-8021 builder attribution.
@@ -106,11 +108,15 @@ Retries are not automatic because repeating a paid request may create another se
 
 After a completed canary, Base Agent Meter verifies transaction inclusion and status, Base USDC `Transfer` evidence, expected payer, recipient, and amount, and the ERC-8021 calldata suffix when present. The result distinguishes declared, observed, and verified builder attribution.
 
+Settlement attribution recognizes both the flat code list in ERC-8021 schema 0 (used by direct Base Receipt transfers) and the application code in x402 schema 2. Schema-2 service codes do not count as the seller's application code. Custom-registry schema-1 codes may be observed but are not verified by a string match alone. The returned `builderAttribution.format` identifies the decoded format. Implementations: [Ox ERC-8021](https://github.com/wevm/ox/blob/main/src/erc8021/Attribution.ts) and [x402 builder-code extension](https://github.com/x402-foundation/x402/blob/main/specs/extensions/builder_code.md).
+
 The canary writes a JSON artifact under `artifacts/` containing endpoint, timestamp, payment terms, payer, transaction hash, response status, latency, response body hash, USDC evidence, and builder-attribution evidence. Existing transactions can be checked through `POST /api/proof/verify`.
 
 ## Deployment status and optional seller fixture
 
-The previously configured Railway host returned **HTTP 404, Application not found**, on 2026-10-01. Public availability of `/health` and `/mcp` is not verified. A passing build or a merged commit is not evidence of a live service.
+The read-only checker and MCP tools are hosted on the existing Base Receipt Vercel deployment at `/meter` and `/meter/mcp`. The host imports a pinned Git revision of this repository; `/api/meter` identifies that revision. The web page and public SDK access were checked on 2026-10-01. The paid snapshot fixture and paid canary are not hosted on that service.
+
+The old Railway host returned **HTTP 404, Application not found**, on 2026-10-01 and remains unavailable. Its `/health`, standalone `/mcp` and paid fixture are not served by that hostname. A passing build or a merged commit alone is not evidence of a live service.
 
 `railway.json` selects the Dockerfile, sets `/health` as the deployment health check, and configures up to three on-failure restarts. The Docker build and CI use the committed dependency lockfile. This configuration applies when an authorized Railway service deploys the repository; it does not create or reconnect that service. See [Railway's configuration reference](https://docs.railway.com/config-as-code/reference).
 

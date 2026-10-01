@@ -9,7 +9,10 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.build.json",
@@ -33,7 +36,7 @@
     "dotenv": "^16.4.7",
     "express": "^5.1.0",
     "express-rate-limit": "^8.7.0",
-    "ox": "^1.6.2",
+    "ox": "1.7.4",
     "viem": "^2.45.0",
     "zod": "^4.6.5"
   },
