@@ -1,4 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import { isAddress, isHash } from "viem";
 import { z } from "zod";
 import { checkX402Endpoint, type CheckRequest } from "./assurance.js";
@@ -86,4 +88,24 @@ export function createMeterMcpServer(dependencies: McpDependencies) {
   );
 
   return server;
+}
+
+export async function handleMeterMcpRequest(
+  req: IncomingMessage & { body?: unknown },
+  res: ServerResponse,
+  dependencies: McpDependencies,
+) {
+  const server = createMeterMcpServer(dependencies);
+  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
+  try {
+    await server.connect(transport);
+    await transport.handleRequest(req, res, req.body);
+  } catch (error) {
+    console.error("mcp_request_failed", error);
+    if (!res.headersSent) res.statusCode = 500;
+    if (!res.writableEnded) res.end(JSON.stringify({ error: "mcp_request_failed" }));
+  } finally {
+    await transport.close().catch(() => undefined);
+    await server.close().catch(() => undefined);
+  }
 }
