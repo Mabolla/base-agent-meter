@@ -8,6 +8,8 @@ It is a focused assurance tool for teams operating x402-paid APIs on Base. It pr
 
 **Live read-only interface:** [Base Agent Meter](https://base-receipt-six.vercel.app/meter) · **MCP:** `https://base-receipt-six.vercel.app/meter/mcp` · [Hosted capabilities and pinned source revision](https://base-receipt-six.vercel.app/api/meter).
 
+**Hermes integration:** [configuration and evidence checks](docs/hermes-integration.md) · [useful-work roadmap](docs/hermes-roadmap.md) · [current checkpoint](docs/hermes-status.md). The SDK runner has been tested; an actual Hermes model run remains the next gate.
+
 ## 1. Pre-deploy and CI check
 
 The checker contacts a public seller endpoint without providing payment and validates reachability, x402 v2 negotiation, Base Mainnet, Base USDC, positive atomic amount, valid `payTo`, pinned expectation drift, Bazaar metadata, and declared ERC-8021 builder attribution.

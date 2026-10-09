@@ -1,0 +1,7 @@
+{
+  "transactionHash": "0xae5b6ab118a58aed27c89b05ef9af7e75406487d4d42496284e6767f6cf14483",
+  "expectedPayTo": "0x94705A9d675daa924F9190Eca4c05ED6B12d5345",
+  "expectedPayer": "0x94705A9d675daa924F9190Eca4c05ED6B12d5345",
+  "expectedAmount": "10000",
+  "declaredBuilderCode": "bc_87fjmj1l"
+}
