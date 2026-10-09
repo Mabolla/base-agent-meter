@@ -1,0 +1,9 @@
+# Merge this block into the isolated Hermes profile's config.yaml.
+# Model/provider settings are configured separately with Hermes setup.
+mcp_servers:
+  base_meter:
+    url: "https://base-receipt-six.vercel.app/meter/mcp"
+    tools:
+      include:
+        - check_x402_endpoint
+        - verify_base_settlement
